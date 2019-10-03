@@ -1,0 +1,34 @@
+﻿<Window x:Class="DeveloperTest.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MainWindow" Height="740" Width="1297">
+    <Grid>
+        <DataGrid Name="HeadersGrid" VerticalAlignment="Top" Height="554" Margin="10,146,0,0" 
+                  HorizontalAlignment="Left" Width="632" 
+                  SelectionMode="Single" 
+                  ColumnWidth="*"
+                  SelectionChanged="HeadersGrid_SelectionChanged" />
+        <TextBox Name="Server" HorizontalAlignment="Left" Height="23" Margin="98,41,0,0" TextWrapping="Wrap" Text="imap.gmail.com" VerticalAlignment="Top" Width="190"/>
+        <Label Content="Server" HorizontalAlignment="Left" Margin="10,37,0,0" VerticalAlignment="Top"/>
+        <Label Content="Port" HorizontalAlignment="Left" Margin="10,65,0,0" VerticalAlignment="Top"/>
+        <TextBox Name="Port" HorizontalAlignment="Left" Height="23" Margin="98,69,0,0" TextWrapping="Wrap" Text="993" VerticalAlignment="Top" Width="190"/>
+        <Label Content="Encryption" HorizontalAlignment="Left" Margin="323,7,0,0" VerticalAlignment="Top"/>
+        <ComboBox Name="Encryption" HorizontalAlignment="Left" Margin="411,10,0,0" VerticalAlignment="Top" Width="190">
+            <ComboBoxItem Content="Unencrypted" IsSelected="True"/>
+            <ComboBoxItem Content="SSL/TLS"/>
+            <ComboBoxItem Content="STARTTLS"/>
+        </ComboBox>
+        <Label Content="Username" HorizontalAlignment="Left" Margin="323,38,0,0" VerticalAlignment="Top"/>
+        <Label Content="Password" HorizontalAlignment="Left" Margin="323,69,0,0" VerticalAlignment="Top"/>
+        <TextBox Name="Username" Text="mobilityfaculty@gmail.com" HorizontalAlignment="Left" Height="23" Margin="411,42,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="190"/>
+        <TextBox Name="Password" Text="Mobility1!"  HorizontalAlignment="Left" Height="23" Margin="411,73,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="190"/>
+        <Button Content="Start" HorizontalAlignment="Left" Margin="446,104,0,0" VerticalAlignment="Top" Width="155" Height="36" Click="StartButton_Click"/>
+        <Label Content="Server type" HorizontalAlignment="Left" Margin="10,7,0,0" VerticalAlignment="Top"/>
+        <ComboBox Name="ServiceType" HorizontalAlignment="Left" Margin="98,10,0,0" VerticalAlignment="Top" Width="190">
+            <ComboBoxItem Content="IMAP" IsSelected="True"/>
+            <ComboBoxItem Content="POP3"/>
+        </ComboBox>
+        <TextBox Name="MessageBody" HorizontalAlignment="Left" Height="690" Margin="647,10,0,0" TextWrapping="Wrap" Text="This should show the message body HTML/Text" VerticalAlignment="Top" Width="632"/>
+
+    </Grid>
+</Window>
