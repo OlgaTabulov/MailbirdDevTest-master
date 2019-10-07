@@ -11,6 +11,9 @@ namespace DeveloperTest.Business
     public class POP3Manager: IConnectable
     {
         Pop3 pop;
+        public Dictionary<string, EmailView> EmailList { get; set; }
+        public bool ListChanged { get; set; } = false;
+
         public POP3Manager()
         {
             this.pop = new Pop3();
@@ -54,26 +57,62 @@ namespace DeveloperTest.Business
         {
             return pop.GetAll();
         }
-        public void PopulateHeaderByUid(string uid, ref EmailView emailView)
+
+        public async void PopulateHeaderAsync(string uid)
         {
-            MailBuilder builder = new MailBuilder();
-            var headers = pop.GetHeadersByUID(uid);
-            IMail email = builder.CreateFromEml(headers);
-            EmailViewManager.SetHeader(ref emailView, 
-                email.From.First().Name, 
-                email.Subject,
-                email.Date?.ToString("MM/dd/yyyy hh:mm:ss"));
+            await Task.Run(() => GetHeader(uid));
         }
-        public void PopulateBodyByUid(string uid, ref EmailView emailView)
+        private void GetHeader(string uid)
         {
-            MailBuilder builder = new MailBuilder();
-            IMail email = builder.CreateFromEml(
-                pop.GetMessageByUID(uid));
-            EmailViewManager.SetBody(ref emailView, email.Text, email.Html);
+            lock (EmailList)
+            {
+                var emailView = EmailList[uid.ToString()];
+                lock (pop)
+                {
+                    MailBuilder builder = new MailBuilder();
+                    var headers = pop.GetHeadersByUID(uid);
+                    IMail email = builder.CreateFromEml(headers);
+                    EmailViewManager.SetHeader(ref emailView,
+                        email.From.First().Name,
+                        email.Subject,
+                        email.Date?.ToString("MM/dd/yyyy hh:mm:ss"));
+                    ListChanged = true;
+                }
+            }
+        }
+        public async Task PopulateBodyAsync(string uid)
+        {
+            await Task.Run(() => GetBody(uid));
+        }
+        public void PopulateBodySync(string uid)
+        {
+            GetBody(uid);
+        }
+
+        private void GetBody(string uid)
+        {
+            lock (EmailList)
+            {
+                var emailView = EmailList[uid.ToString()];
+                if (emailView.Text == null)
+                {
+                    lock (pop)
+                    {
+                        MailBuilder builder = new MailBuilder();
+                        IMail email = builder.CreateFromEml(
+                            pop.GetMessageByUID(uid));
+                        EmailViewManager.SetBody(ref emailView, email.Text, email.Html);
+                        ListChanged = true;
+                    }
+                }
+            }
         }
         public void Close()
         {
-            pop.Close();
+            lock (pop)
+            {
+                pop.Close();
+            }
         }
     }
 }

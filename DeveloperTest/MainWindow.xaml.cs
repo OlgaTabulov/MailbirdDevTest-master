@@ -9,6 +9,9 @@ using Limilabs.Mail;
 using Limilabs.Client.IMAP;
 using Limilabs.Client.POP3;
 using DeveloperTest.Business;
+using System.Threading;
+using System.Windows.Threading;
+using System.Threading.Tasks;
 
 namespace DeveloperTest
 {
@@ -17,116 +20,155 @@ namespace DeveloperTest
     /// </summary>
     public partial class MainWindow : Window
     {
-        public Dictionary<string, EmailView> EmailList = new Dictionary<string, EmailView>();
-        public dynamic manager;
+        public dynamic Manager;
+        public bool DontKillManager = false;
         public MainWindow()
         {
             InitializeComponent();
         }
-
-        private void CleanEmails()
+        async Task AsyncDisplayRefreshWorker()
         {
-            HeadersGrid.Items.Clear();
-            HeadersGrid.Columns.Clear();
-            EmailList = new Dictionary<string, EmailView>();
-            manager = null;
+            while (true)
+            {
+                await Application.Current.Dispatcher.InvokeAsync(new Action(() =>
+                {
+                    Task.Delay(100);
+                    if (Manager!= null && Manager.EmailList != null)
+                    {
+                        if (Manager.ListChanged)
+                        {
+                            HeadersGrid.ItemsSource = ((Dictionary<string, EmailView>)Manager.EmailList).Values.ToList();
+                            HeadersGrid.Items.Refresh();
+                            Manager.ListChanged = false;
+                        }
+                    }
+                }));
+                if (IsTimeToKill())
+                {
+                    Manager.Close();
+                    break; //breaks out of display feedback loop
+                }
+            }
+        }
+
+        private bool IsTimeToKill()
+        {
+            if (Manager != null && Manager.EmailList != null && !DontKillManager)
+            {
+                foreach(EmailView email in Manager.EmailList.Values) 
+                {
+                    if (email.Text == null || email.Subject == null)
+                        return false;                
+                }
+                return true;
+            }
+            return false;
+        }
+
+        private void CleanScreen()
+        {
+            HeadersGrid.ItemsSource = null;
+            if (Manager != null)
+                Manager.Close();
+            Manager = null;
             MessageBody.Text = "";
         }
-        private void DisplayColumnNames()
-        {
-            if (HeadersGrid.Columns.Count == 0)
-            {
-                var column = new DataGridTextColumn();
-                column.Header = "From";
-                column.Binding = new Binding("From");
-                HeadersGrid.Columns.Add(column);
-                column = new DataGridTextColumn();
-                column.Header = "Subject";
-                column.Binding = new Binding("Subject");
-                HeadersGrid.Columns.Add(column);
-                column = new DataGridTextColumn();
-                column.Header = "Date";
-                column.Binding = new Binding("Date");
-                HeadersGrid.Columns.Add(column);
-            }
-        }
 
-        private void ConnectAndLoad()
+        private bool ConnectToServer()
         {
-            if (ServiceType.Text == "POP3")
-            {
-                manager = new POP3Manager();
-            }
-            else
-            {
-                manager = new IMAPManager();
-            }
-            
-            manager.Connect(Server.Text, Port.Text, Encryption.SelectedValue.ToString());
-            
             try
             {
-                manager.Authenticate(Username.Text, Password.Text);
-                manager.SelectInbox();
-                List<string> uids = manager.GetAllUids();
-                foreach (var uid in uids)
+                if (ServiceType.Text == "POP3")
                 {
-                    EmailList.Add(uid, new EmailView { Id = uid });
+                    Manager = new POP3Manager();
                 }
-
-                foreach (var uid in uids) 
-                { 
-                    var emailView = EmailList[uid];
-                    manager.PopulateHeaderByUid(uid, ref emailView);
-                    AddRowToHeadersGrid(emailView);
-                }
-
-                foreach (string uid in uids)
+                else
                 {
-                    var emailView = EmailList[uid];
-                    manager.PopulateBodyByUid(uid, ref emailView);
+                    Manager = new IMAPManager();
                 }
 
-                manager.Close();
+                Manager.Connect(Server.Text, Port.Text, Encryption.SelectedValue.ToString());
+                Manager.Authenticate(Username.Text, Password.Password);
+                Manager.SelectInbox();
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                manager.Close();
+                MessageBox.Show("Could not connect. \n" + e);
+                return false;
+            }
+            return true;
+        }
+        private async Task Load()
+        {
+            try
+            {
+                List<string> uids = Manager.GetAllUids();
+                Manager.EmailList = new Dictionary<string, EmailView>();
+                for (int i = 0; i < uids.Count; i++)
+                {
+                    Manager.EmailList.Add(uids[i], new EmailView { Id = uids[i], Order = i });
+                }
+                var displayWorker = Task.Run(
+                async () =>
+                {
+                    await AsyncDisplayRefreshWorker();
+                });
+
+                foreach (var uid in uids) 
+                {
+                    await Task.Factory.StartNew(() =>
+                    {
+                        DispatcherOperation op = Dispatcher.InvokeAsync((Action)(() =>
+                        {
+                            Manager.PopulateHeaderAsync(uid);
+                        }));                        
+                    });
+                }
+                
+                foreach (string uid in uids)
+                {
+                    await Task.Factory.StartNew(() =>
+                    {
+                        DispatcherOperation op = Dispatcher.InvokeAsync((Action)(() =>
+                        {
+                            Manager.PopulateBodyAsync(uid);
+                        }));
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show("Error accured. \n" + e);
+                Manager.Close();
             }
         }
-
-        
-        private void AddRowToHeadersGrid(EmailView item)
+        protected async void StartButton_Click(object sender, RoutedEventArgs e)
         {
-            HeadersGrid.Items.Add(item);
-        }
-        protected void StartButton_Click(object sender, RoutedEventArgs e)
-        {
-            CleanEmails();
-            DisplayColumnNames(); //move this on display first row
-            ConnectAndLoad();
+            CleanScreen();
+            if (ConnectToServer())
+                await Load();
         }
 
         protected void HeadersGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.OriginalSource != null)
             {
-                var grid = (DataGrid)e.OriginalSource;
-                var item = (EmailView)grid.SelectedItem;
+                var item = (EmailView)((DataGrid)e.OriginalSource).SelectedItem;
 
                 if (item != null)
                 {
-                    if (item.Text is null)
+                    //I simplified the displayed field to Text only, even though both Text and Html are populated.
+                    string text = item.Text;
+                    if (text is null)
                     {
-                        manager.PopulateBodyByUid(item.Id, ref item);
+                        DontKillManager = true;
+                        Manager.PopulateBodySync(item.Id);
+                        text = ((Dictionary<string, EmailView>)Manager.EmailList)[item.Id].Text;
+                        DontKillManager = false;
                     }
-
-                    MessageBody.Text = item.Text ?? "The email has not been loaded yet";
+                    MessageBody.Text = text;
                 }
             }
         }
-
-
     }
 }

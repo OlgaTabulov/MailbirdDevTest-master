@@ -8,12 +8,15 @@ namespace DeveloperTest.Business
 {
     public interface IConnectable
     {
+        Dictionary<string, EmailView> EmailList { get; set; }
+        bool ListChanged { get; set; }
         void Connect(string server, string port, string encryption);
         void Authenticate(string username, string password);
         void SelectInbox();
         List<string> GetAllUids();
-        void PopulateHeaderByUid(string uid, ref EmailView emailView);
-        void PopulateBodyByUid(string uid, ref EmailView emailView);
+        void PopulateHeaderAsync(string uid);
+        Task PopulateBodyAsync(string uid);
+        void PopulateBodySync(string uid);
         void Close();
     }
 }
